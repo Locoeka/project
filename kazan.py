@@ -33,7 +33,9 @@ for url in urls:
         links = links + page_grabber(flats)
         print('Page {} is working well'.format(i))		
 
-		
+
+ulinks = set(links) # смотрим только уникальные ссылки на предложения	
+
 flats_dict = {}
 N = 0
 

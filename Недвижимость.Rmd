@@ -1,0 +1,238 @@
+---
+title: "Недвижимость Казань"
+output:
+  pdf_document:
+    latex_engine: xelatex
+fontsize: 12pt
+header-includes:
+  - \usepackage{fontspec}
+  - \defaultfontfeatures{Ligatures={TeX}}
+  - \setmainfont{cmun}[ Extension=.otf, UprightFont=*rm, ItalicFont=*ti, BoldFont=*bx, BoldItalicFont=*bi]
+  - \usepackage[english,russian]{babel}
+  - \usepackage{float}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+```
+
+```{r, warning=F, comment=F, error=F, message=F, echo=FALSE}
+library("corrplot", warn.conflicts = FALSE )
+library("car", warn.conflicts = FALSE )
+library("ggplot2", warn.conflicts = FALSE )
+library("stargazer", warn.conflicts = FALSE )
+library("magrittr", warn.conflicts = FALSE )
+library("knitr", warn.conflicts = FALSE )
+library("dplyr", warn.conflicts = FALSE )
+library("tidyr", warn.conflicts = FALSE )
+library("lmtest", warn.conflicts = FALSE )
+library("olsrr", warn.conflicts = FALSE)
+library("sandwich", warn.conflicts = FALSE )
+library("Matching", warn.conflicts = FALSE )
+library("tableone", warn.conflicts = FALSE )
+library("kableExtra", warn.conflicts = FALSE )
+library("xtable", warn.conflicts = FALSE )
+library("magick", warn.conflicts = FALSE )
+library("glmnet", warn.conflicts = FALSE )
+library("grf", warn.conflicts = FALSE )
+library("randomForest", warn.conflicts = FALSE )
+library("pwt9", warn.conflicts = FALSE )
+library("readxl", warn.conflicts = FALSE )
+library("foreign", warn.conflicts = FALSE )
+library("Synth", warn.conflicts = FALSE )
+library("gridExtra", warn.conflicts = FALSE )
+```
+
+
+```{r}
+Data = read.csv("C://Users/Kate/Downloads/CIAN.csv", encoding = "UTF-8")[,-c(1,8,15)]
+levels(Data$Комнат)=c("1-комн.","2-комн.","3-комн.","4-комн.","5-комн.","Апарт.своб.планировки", "Кв.своб.планировки", "Многокомнатная", "Студия")
+levels(Data$Район)[5] = "р-н Ново-Савиновский"
+```
+
+
+|   `r colnames(Data)` |
+|-----------------------
+
+```{r, warning=FALSE}
+data_frame("Переменная" = names(Data),
+           "Класс" = sapply(Data, class),
+           "Пример значений" = sapply(Data, function(x) paste0(x[20:30],  collapse = "; ")),
+           row.names = NULL) %>% 
+  kable(format = "latex", longtable = T) %>%
+  column_spec(2, width = "4em") %>%
+  column_spec(3, width = "25em")
+
+```
+
+
+
+```{r dev="cairo_pdf", warning=FALSE, fig.width=3.5,fig.height=4.5}
+CORR = cor(Data[,c(1:4,10,13)],use = "na.or.complete")
+corrplot(CORR, type = "lower", tl.col = "black", tl.srt = 37, cl.cex = 0.55, tl.cex = 0.8, diag = F, order="FPC")
+corrplot(CORR, type = "lower", tl.col = "black", tl.srt = 37, cl.cex = 0.55, tl.cex = 0.8, diag = F, order="FPC", method ="number")
+```
+
+
+```{r, fig.width=20,fig.height=6, dev="cairo_pdf", warning=FALSE}
+ggplot(Data, aes(x = Цена, fill = Комнат)) + 
+  geom_density(alpha=.6) +
+  theme(text = element_text(size=30)) + 
+  labs(title="Плотность распределения цен по количеству комнат", fill="Комнатность" )
+
+ggplot(filter(Data, Цена > 10000000), aes(x = Цена)) + 
+  geom_density() +
+  theme(text = element_text(size=30)) + 
+  labs(title="Плотность распределения цен" )
+```
+
+```{r, fig.width=20,fig.height=6,dev="cairo_pdf", warning=FALSE}
+ggplot(Data, aes(x = Цена, fill = Тип.жилья)) + 
+  geom_density(alpha=.6) +
+  theme(text = element_text(size=30)) + 
+  labs(title="Плотность распределения цен по типу жилья", fill="Тип жилья" )
+```
+
+```{r, fig.width=20,fig.height=6, dev="cairo_pdf", warning=FALSE}
+ggplot(Data, aes(x = Цена, fill = Район)) + 
+  geom_density(alpha=.6) +
+  theme(text = element_text(size=30)) + 
+  labs(title="Плотность распределения цен по районам", fill="Район" )
+```
+
+```{r, fig.width=20,fig.height=6, dev="cairo_pdf", warning=FALSE}
+ggplot(Data, aes(x = Цена, fill = Отделка)) + 
+  geom_density(alpha=.6) +
+  theme(text = element_text(size=30)) + 
+  labs(title="Плотность распределения цен по отделке", fill="Отделка" )
+```
+
+```{r, fig.width=20,fig.height=6, dev="cairo_pdf", warning=FALSE}
+ggplot(Data, aes(x = Цена, fill = Ремонт)) + 
+  geom_density(alpha=.6) +
+  theme(text = element_text(size=30)) + 
+  labs(title="Плотность распределения цен по ремонту", fill="Ремонт" )
+```
+
+
+```{r, fig.width=10,fig.height=5, dev="cairo_pdf", warning=FALSE, message=FALSE}
+ggplot(Data, aes(x = Общая, y = Цена, color = factor(Комнат))) +
+  geom_point() +
+  theme(text = element_text(size=20)) + 
+  labs(title="График разброса цен от общей площади", color="Комнатность", x="Общая площадь, м2") +
+  geom_smooth(method = lm)
+```
+
+```{r, fig.width=10,fig.height=5, dev="cairo_pdf", warning=FALSE, message=FALSE}
+ggplot(Data, aes(x = Общая, y = Цена, color = Район)) +
+  geom_point() +
+  theme(text = element_text(size=20)) + 
+  labs(title="График разброса цен от общей площади", color="Район", x="Общая площадь, м2") +
+  geom_smooth(method = lm)
+```
+
+
+```{r, fig.width=10,fig.height=6, dev="cairo_pdf", warning=FALSE, message=FALSE}
+ggplot(Data, aes(x=Район, y=Цена, color = Район)) +
+  geom_boxplot() +
+  theme(text = element_text(size=20),
+        axis.text.x = element_text(angle=17,hjust = 0.85),
+        legend.position = "none")
+```
+
+
+```{r, fig.width=10,fig.height=6, dev="cairo_pdf", warning=FALSE, message=FALSE}
+ggplot(Data, aes(x=Район, y=Общая, color = Район)) +
+  geom_boxplot() +
+  theme(text = element_text(size=20),
+        axis.text.x = element_text(angle=17,hjust = 0.85),
+        legend.position = "none") +
+  labs(y = "Общая площадь, м2")
+```
+
+```{r, fig.width=10,fig.height=6, dev="cairo_pdf", warning=FALSE, message=FALSE}
+ggplot(Data, aes(x=as.factor(Этаж), y=Цена, color = as.factor(Этаж))) +
+  geom_boxplot() +
+  theme(text = element_text(size=20),
+        axis.text.x = element_text(hjust = 0.85),
+        legend.position = "none") +
+  labs(x = "Этаж")
+```
+
+```{r, fig.width=10,fig.height=5, dev="cairo_pdf", warning=FALSE, message=FALSE}
+ggplot(Data, aes(x=Тип.жилья, y=Цена, color = Ремонт)) +
+  geom_boxplot() +
+  theme(text = element_text(size=20),
+        axis.text.x = element_text(hjust = 0.85,angle=17)) +
+  labs(x = "Тип жилья")
+```
+
+```{r, fig.width=10,fig.height=5, dev="cairo_pdf", warning=FALSE, message=FALSE}
+ggplot(Data, aes(x=Комнат, y=Цена, color = Комнат)) +
+  geom_boxplot() +
+  theme(text = element_text(size=20),
+        axis.text.x = element_text(hjust = 0.85,angle=17),
+        legend.position = "none") +
+  labs(x = "Количество комнат")
+```
+
+```{r}
+reg1 = lm(Data, formula = log(Цена) ~ log(Общая) + log(Жилая) + log(Кухня) + log(Этаж))
+reg2 = lm(Data, formula = log(Цена) ~ log(Общая) + log(Жилая) + log(Кухня) + log(Этаж) + Комнат + Район + Построен)
+reg3 = lm(Data, formula = log(Цена) ~ log(Общая) + log(Жилая) + log(Кухня) + log(Этаж) + Ремонт + Санузел + Балкон.лоджия)
+
+```
+
+\eject \pdfpagewidth=10in \pdfpageheight=12in
+
+```{r results='asis', warning=F, fig.width=7,fig.height=8, dev='cairo_pdf'}
+stargazer(reg1,reg2,reg3, font.size="footnotesize", header=FALSE, no.space=TRUE, single.row=TRUE, column.labels = c("Модель 1", "Модель 2", " Модель 3"), column.sep.width = "-5pt", table.placement = "H")
+```
+
+```{r, fig.width=8,fig.height=4, results= "asis", dev='cairo_pdf'}
+p = ols_plot_resid_lev(reg2) 
+```
+
+```{r, fig.width=5,fig.height=3, results= "asis", dev='cairo_pdf'}
+par(mfrow = c(1,1))
+ols_plot_resid_stud_fit(reg1)
+
+
+DataNEW = Data %>% 
+  filter(Общая > 0 & Жилая > 0 & Кухня >0 & Этаж > 0 &  Комнат != "" & Район != "" & Построен > 0) %>%
+  filter(p$plot$data$color =="normal")
+
+reg1 = lm(DataNEW, formula = log(Цена) ~ log(Общая) + log(Жилая) + log(Кухня) + log(Этаж))
+reg2 = lm(DataNEW, formula = log(Цена) ~ log(Общая) + log(Жилая) + log(Кухня) + log(Этаж) + Комнат + Район + Построен)
+reg3 = lm(DataNEW, formula = log(Цена) ~ log(Общая) + log(Жилая) + log(Кухня) + log(Этаж) + Ремонт + Санузел + Балкон.лоджия)
+```
+
+```{r, fig.width=8,fig.height=4, results= "asis", dev='cairo_pdf'}
+
+stargazer(reg1,reg2,reg3, font.size="footnotesize", header=FALSE, no.space=TRUE, single.row=TRUE, column.labels = c("Модель 1", "Модель 2", " Модель 3"), column.sep.width = "-5pt", table.placement = "H")
+
+
+reg1 = lm(Data, formula = log(Цена) ~ log(Общая) + log(Жилая) + log(Кухня) + log(Этаж) + Комнат + Район + Построен + Ремонт + Санузел + Балкон.лоджия + Тип.жилья)
+reg2 = lm(DataNEW, formula = log(Цена) ~ log(Общая) + log(Жилая) + log(Кухня) + log(Этаж)+ Комнат + Район + Построен + Ремонт + Санузел + Балкон.лоджия + Тип.жилья)
+```
+
+
+
+
+```{r results='asis', warning=F, fig.width=7,fig.height=8, dev='cairo_pdf'}
+stargazer(reg1,reg2, font.size="footnotesize", header=FALSE, no.space=TRUE, single.row=TRUE, column.labels = c("Модель 1", "Модель 2"), column.sep.width = "-5pt", table.placement = "H")
+
+
+```
+
+
+```{r, fig.width=12,fig.height=6, dev='cairo_pdf', results='asis', comment = F, message=F}
+library(tree, warn.conflicts = FALSE )
+tree.pr = tree( Data, formula = Цена ~ Общая + Жилая + Кухня + Этаж + Комнат + Район + Построен + Ремонт + Санузел + Балкон.лоджия)
+tree.pr
+```
+
+```{r, fig.width=12,fig.height=6, dev='cairo_pdf', results='asis', comment = F, message=F}
+plot(tree.pr, type="uniform")
+text(tree.pr)
+```
